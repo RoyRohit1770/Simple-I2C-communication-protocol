@@ -1,0 +1,80 @@
+`timescale 1ns / 1ps
+
+module tb_i2c_master;
+
+    reg clk;
+    reg rst;
+    reg start;
+    reg [6:0] addr;
+    reg [7:0] data;
+    wire scl;
+    tri1 sda;   // Simulates I2C pull-up on open-drain SDA line
+    wire done;
+
+    // Debug wires to observe internal DUT signals
+    wire [2:0] debug_state;
+    wire debug_sda_oe;
+    wire debug_sda_out;
+
+    // Instantiate I2C Master
+    i2c_master dut (
+        .clk(clk),
+        .rst(rst),
+        .start(start),
+        .addr(addr),
+        .data(data),
+        .scl(scl),
+        .sda(sda),
+        .done(done),
+        .debug_state(debug_state),
+        .debug_sda_oe(debug_sda_oe),
+        .debug_sda_out(debug_sda_out)
+    );
+
+    // Instantiate Dummy Slave (for ACKs)
+    dummy_slave_ack slave (
+        .scl(scl),
+        .sda(sda)
+    );
+
+    // Generate 50MHz clock (20ns period)
+    always #10 clk = ~clk;
+
+    integer cycles;
+    initial begin
+        // Initialize signals
+        clk = 0;
+        rst = 1;
+        start = 0;
+        addr = 7'b1010011;  // Example slave address
+        data = 8'h5A;       // Example data to send
+
+        // Dump VCD waveform
+        $dumpfile("i2c_timing.vcd");
+        $dumpvars(0, tb_i2c_master);
+
+        // Apply reset
+        #100 rst = 0;
+
+        // Start I2C transfer
+        #200 start = 1;
+        #20000 start = 0;
+
+
+        // Wait with timeout (avoid infinite simulation)
+        cycles = 0;
+        while (done !== 1 && cycles < 100000) begin
+            @(posedge clk);
+            cycles++;
+        end
+
+        if (done)
+            $display("Time=%t, State=%0d, SDA=%b, SCL=%b, SDA_OE=%b, SDA_OUT=%b",
+                     $time, debug_state, sda, scl, debug_sda_oe, debug_sda_out);
+        else
+            $display("❌ Timeout waiting for done signal");
+
+        #500; // Let waveforms settle
+        $finish;
+    end
+endmodule
