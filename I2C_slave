@@ -1,0 +1,32 @@
+`timescale 1ns / 1ps
+
+module dummy_slave_ack (
+    inout wire sda,
+    input wire scl
+);
+    reg drive_low;
+    assign sda = drive_low ? 1'b0 : 1'bz;
+
+    reg [4:0] bit_cnt = 0;
+    reg [1:0] ack_window = 0;
+
+    always @(negedge scl) begin
+        bit_cnt <= bit_cnt + 1;
+
+        // Reset bit count every 18 bits (1 address + 1 data + ACK bits)
+        if (bit_cnt == 18)
+            bit_cnt <= 0;
+
+        // Assert drive_low briefly for ACK bits
+        if (bit_cnt == 8 || bit_cnt == 17) begin
+            ack_window <= 2;
+        end
+
+        if (ack_window > 0) begin
+            drive_low <= 1;
+            ack_window <= ack_window - 1;
+        end else begin
+            drive_low <= 0;
+        end
+    end
+endmodule
